@@ -23,6 +23,12 @@ path = "../crates/assets"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 reqwest_client.workspace = true
 
+[target.'cfg(target_family = "wasm")'.dependencies]
+gpui_web.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = {version = "0.18"}
+
 [profile.release]
 lto = true
 opt-level = 3

@@ -6,6 +6,7 @@ mod actions;
 mod app_menus;
 mod app_state;
 // mod system_tray;
+pub mod embedded_themes;
 pub mod themes;
 mod title_bar;
 

@@ -15,8 +15,10 @@ pub mod pages;
 use gpui::{App, KeyBinding};
 pub use pages::{TaskManager, Welcome};
 
+use app::embedded_themes;
+
 use crate::app::{About, ToggleSearch};
-#[cfg(target_os = "macos")]
+
 use crate::app::{Open, Quit};
 
 /// 初始化 gpui_component（Theme 等），桌面端与 web 在 open_window 前必须调用

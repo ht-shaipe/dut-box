@@ -1,9 +1,16 @@
+//! copyright © htui.tech 2026 - present
+//!
+//! created shaipe by 2026-03-06 10:31:05
+
 use gpui::{Action, App, SharedString};
 use gpui_component::{scroll::ScrollbarShow, Theme, ThemeMode, ThemeRegistry};
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_family = "wasm"))]
 use gpui_component::ActiveTheme;
+
+#[cfg(target_family = "wasm")]
+use super::embedded_themes;
 
 const STATE_FILE: &str = "target/state.json";
 
