@@ -1,565 +1,467 @@
-use gpui::prelude::*;
-use gpui::*;
+use std::collections::HashMap;
 
-/// Web 下使用支持中文的字体，否则用等宽字体
-#[inline]
-fn mono_font() -> &'static str {
-    if cfg!(target_family = "wasm") {
-        "Noto Sans SC"
-    } else {
-        "JetBrains Mono"
-    }
-}
+use gpui::{
+    div, prelude::FluentBuilder, px, relative, Action, App, AppContext, ClickEvent, Context,
+    Entity, Focusable, IntoElement, ParentElement, Render, SharedString, Styled, Window,
+};
 
-/// 工具卡片数据结构
-struct ToolCard {
-    name: SharedString,
-    category: SharedString,
-    description: SharedString,
-    icon: SharedString,
-    tags: Vec<SharedString>,
-    icon_color: (u8, u8, u8),
-}
+use gpui_component::{
+    badge::Badge,
+    breadcrumb::{Breadcrumb, BreadcrumbItem},
+    divider::Divider,
+    h_flex,
+    menu::DropdownMenu,
+    sidebar::{
+        Sidebar, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem,
+        SidebarToggleButton,
+    },
+    switch::Switch,
+    v_flex, ActiveTheme, Icon, IconName, Side, Sizable,
+};
+use serde::Deserialize;
+use crate::app::ToggleSearch;
 
-/// 快捷入口数据结构
-struct QuickItem {
-    label: SharedString,
-    icon: SharedString,
-    color: (u8, u8, u8),
-}
-
-/// 最近使用数据结构
-struct RecentItem {
-    name: SharedString,
-    icon: SharedString,
-    time: SharedString,
-}
-
-/// 主页面视图
 pub struct Welcome {
-    search_text: SharedString,
-    active_tab: usize,
-    tools: Vec<ToolCard>,
-    quick_items: Vec<QuickItem>,
-    recent_items: Vec<RecentItem>,
+    active_items: HashMap<Item, bool>,
+    last_active_item: Item,
+    active_subitem: Option<SubItem>,
+    collapsed: bool,
+    side: Side,
+    click_to_open_submenu: bool,
+    focus_handle: gpui::FocusHandle,
+    checked: bool,
 }
 
 impl Welcome {
-    pub fn new() -> Self {
+    pub fn view(window: &mut Window, cx: &mut App) -> Entity<Self> {
+        cx.new(|cx| Self::new(window, cx))
+    }
+
+    fn new(_: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut active_items = HashMap::new();
+        active_items.insert(Item::Playground, true);
+
         Self {
-            search_text: SharedString::from(""),
-            active_tab: 0,
-            tools: vec![
-                ToolCard {
-                    name: "JSON 格式化".into(),
-                    category: "Formatter".into(),
-                    description: "美化、压缩、验证 JSON 数据，支持语法高亮和错误提示".into(),
-                    icon: "{ }".into(),
-                    tags: vec!["JSON".into(), "格式化".into(), "验证".into()],
-                    icon_color: (0, 212, 255),
-                },
-                ToolCard {
-                    name: "Base64 编解码".into(),
-                    category: "Encoder".into(),
-                    description: "文本与 Base64 格式互转，支持图片 Base64 编码".into(),
-                    icon: "64".into(),
-                    tags: vec!["Base64".into(), "编码".into(), "图片".into()],
-                    icon_color: (245, 158, 11),
-                },
-                ToolCard {
-                    name: "URL 编解码".into(),
-                    category: "Converter".into(),
-                    description: "URL 编码解码工具，支持中文和特殊字符转换".into(),
-                    icon: "URL".into(),
-                    tags: vec!["URL".into(), "编码".into(), "中文".into()],
-                    icon_color: (168, 85, 247),
-                },
-                ToolCard {
-                    name: "密码生成器".into(),
-                    category: "Generator".into(),
-                    description: "生成高强度随机密码，支持自定义长度和字符集".into(),
-                    icon: "🔐".into(),
-                    tags: vec!["密码".into(), "安全".into(), "随机".into()],
-                    icon_color: (236, 72, 153),
-                },
-                ToolCard {
-                    name: "时间戳转换".into(),
-                    category: "Converter".into(),
-                    description: "Unix 时间戳与日期时间互转，支持多种格式".into(),
-                    icon: "⏱".into(),
-                    tags: vec!["时间戳".into(), "日期".into(), "时区".into()],
-                    icon_color: (168, 85, 247),
-                },
-                ToolCard {
-                    name: "正则表达式测试".into(),
-                    category: "Validator".into(),
-                    description: "在线正则表达式测试工具，支持替换和匹配".into(),
-                    icon: ".*".into(),
-                    tags: vec!["Regex".into(), "匹配".into(), "测试".into()],
-                    icon_color: (16, 185, 129),
-                },
-            ],
-            quick_items: vec![
-                QuickItem {
-                    label: "JSON".into(),
-                    icon: "{ }".into(),
-                    color: (0, 212, 255),
-                },
-                QuickItem {
-                    label: "Base64".into(),
-                    icon: "64".into(),
-                    color: (245, 158, 11),
-                },
-                QuickItem {
-                    label: "时间戳".into(),
-                    icon: "⏱".into(),
-                    color: (236, 72, 153),
-                },
-                QuickItem {
-                    label: "正则".into(),
-                    icon: ".*".into(),
-                    color: (16, 185, 129),
-                },
-                QuickItem {
-                    label: "颜色".into(),
-                    icon: "🎨".into(),
-                    color: (245, 158, 11),
-                },
-                QuickItem {
-                    label: "密码".into(),
-                    icon: "🔐".into(),
-                    color: (239, 68, 68),
-                },
-            ],
-            recent_items: vec![
-                RecentItem {
-                    name: "JSON 格式化".into(),
-                    icon: "{ }".into(),
-                    time: "2 分钟前".into(),
-                },
-                RecentItem {
-                    name: "Base64 编解码".into(),
-                    icon: "64".into(),
-                    time: "15 分钟前".into(),
-                },
-                RecentItem {
-                    name: "时间戳转换".into(),
-                    icon: "⏱".into(),
-                    time: "1 小时前".into(),
-                },
-            ],
+            active_items,
+            last_active_item: Item::Playground,
+            active_subitem: None,
+            collapsed: false,
+            side: Side::Left,
+            focus_handle: cx.focus_handle(),
+            checked: false,
+            click_to_open_submenu: false,
         }
     }
-}
 
-impl Render for Welcome {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Web 下使用支持中文的字体，避免乱码
-        let root_font = if cfg!(target_family = "wasm") {
-            "Noto Sans SC"
-        } else {
-            "Space Grotesk"
-        };
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .bg(rgb(0x0f0f1a))
-            .font_family(root_font)
-            .child(self.render_header())
-            .child(self.render_search())
-            .child(self.render_quick_access())
-            .child(self.render_tools_section())
-            .child(self.render_recent_section())
-            .child(self.render_footer())
-    }
-}
-
-impl Welcome {
-    /// 渲染头部
-    fn render_header(&self) -> Div {
-        div()
-            .flex()
-            .justify_between()
-            .items_center()
-            .px_6()
-            .py_4()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .w_12()
-                            .h_12()
-                            .rounded_xl()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_2xl()
-                            .bg(rgba(0x00d4ff))
-                            .child("🛠️"),
-                    )
-                    .child(
-                        div()
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .child("DevToolbox"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x888888))
-                                    .font_family(mono_font())
-                                    .child("v2.0.0 // DEVELOPER UTILITIES"),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(self.render_icon_button("⚙️".into()))
-                    .child(self.render_icon_button("🌙".into()))
-                    .child(self.render_icon_button("ℹ️".into())),
-            )
-    }
-
-    fn render_icon_button(&self, icon: SharedString) -> Div {
-        div()
-            .w_11()
-            .h_11()
-            .rounded_lg()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_xl()
-            .bg(rgba(0xffffff05))
-            .border_1()
-            .border_color(rgba(0xffffff10))
-            .child(icon)
-    }
-
-    /// 渲染搜索框
-    fn render_search(&self) -> Div {
-        div().px_6().pb_6().child(
-            div()
-                .max_w(px(700.0))
-                .mx_auto()
-                .relative()
+    fn render_content(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().gap_3().child(
+            h_flex()
+                .gap_3()
                 .child(
-                    div()
-                        .absolute()
-                        .left(px(16.0))
-                        .top(px(16.0))
-                        .text_xl()
-                        .child("🔍"),
+                    Switch::new("side")
+                        .label("Placement Right")
+                        .checked(self.side.is_right())
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.side = if *checked { Side::Right } else { Side::Left };
+                            cx.notify();
+                        })),
                 )
                 .child(
-                    div()
-                        .w_full()
-                        .px_6()
-                        .py_4()
-                        .pr_16()
-                        .text_lg()
-                        .rounded_2xl()
-                        .bg(rgba(0xffffff05))
-                        .border_1()
-                        .border_color(rgba(0xffffff10))
-                        .text_color(rgb(0xffffff))
-                        .child("搜索工具... (例如: JSON格式化、Base64编码)"),
-                )
-                .child(
-                    div()
-                        .absolute()
-                        .right(px(16.0))
-                        .top(px(14.0))
-                        .px_3()
-                        .py_1()
-                        .rounded_md()
-                        .bg(rgba(0xffffff10))
-                        .border_1()
-                        .border_color(rgba(0xffffff10))
-                        .text_sm()
-                        .font_family(mono_font())
-                        .text_color(rgb(0x888888))
-                        .child("⌘K"),
+                    Switch::new("click-to-open")
+                        .checked(self.click_to_open_submenu)
+                        .label("Click to open submenu")
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.click_to_open_submenu = *checked;
+                            cx.notify();
+                        })),
                 ),
         )
     }
 
-    /// 渲染快捷入口
-    fn render_quick_access(&self) -> Div {
-        div()
-            .px_6()
-            .pb_6()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(0x888888))
-                    .font_family(mono_font())
-                    .mb_4()
-                    .child("// 快捷入口"),
-            )
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(6)
-                    .gap_4()
-                    .max_w(px(800.0))
-                    .mx_auto()
-                    .children(
-                        self.quick_items
-                            .iter()
-                            .map(|item| self.render_quick_item(item)),
-                    ),
-            )
+    fn switch_checked_handler(&mut self, checked: &bool, _: &mut Window, _: &mut Context<Welcome>) {
+        self.checked = *checked;
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Item {
+    Playground,
+    Models,
+    Documentation,
+    Settings,
+    DesignEngineering,
+    SalesAndMarketing,
+    Travel,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SubItem {
+    History,
+    Starred,
+    General,
+    Team,
+    Billing,
+    Limits,
+    Settings,
+    Genesis,
+    Explorer,
+    Quantum,
+    Introduction,
+    GetStarted,
+    Tutorial,
+    Changelog,
+}
+
+impl Item {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Playground => "Playground",
+            Self::Models => "Models",
+            Self::Documentation => "Documentation",
+            Self::Settings => "Settings",
+            Self::DesignEngineering => "Design Engineering",
+            Self::SalesAndMarketing => "Sales and Marketing",
+            Self::Travel => "Travel",
+        }
     }
 
-    fn render_quick_item(&self, item: &QuickItem) -> Div {
-        let (r, g, b) = item.color;
-        div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap_3()
-            .p_4()
-            .rounded_2xl()
-            .bg(rgba(0xffffff05))
-            .border_1()
-            .border_color(rgba(0xffffff10))
-            .child(
-                div()
-                    .w_12()
-                    .h_12()
-                    .rounded_xl()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_xl()
-                    .bg(rgba(r as u32 * 0x10000 + g as u32 * 0x100 + b as u32))
-                    .child(item.icon.clone()),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(0xaaaaaa))
-                    .child(item.label.clone()),
-            )
+    pub fn is_disabled(&self) -> bool {
+        match self {
+            Self::Travel => true,
+            _ => false,
+        }
     }
 
-    /// 渲染工具区域
-    fn render_tools_section(&self) -> Div {
-        let tabs = vec![
-            "全部",
-            "格式化",
-            "编码转换",
-            "生成器",
-            "验证器",
-            "网络",
-            "文本",
+    pub fn icon(&self) -> IconName {
+        match self {
+            Self::Playground => IconName::SquareTerminal,
+            Self::Models => IconName::Bot,
+            Self::Documentation => IconName::BookOpen,
+            Self::Settings => IconName::Settings2,
+            Self::DesignEngineering => IconName::Frame,
+            Self::SalesAndMarketing => IconName::ChartPie,
+            Self::Travel => IconName::Map,
+        }
+    }
+
+    pub fn handler(
+        &self,
+    ) -> impl Fn(&mut Welcome, &ClickEvent, &mut Window, &mut Context<Welcome>) + 'static {
+        let item = *self;
+        move |this, _, _, cx| {
+            if this.active_items.contains_key(&item) {
+                this.active_items.remove(&item);
+            } else {
+                this.active_items.insert(item, true);
+            }
+
+            this.last_active_item = item;
+            this.active_subitem = None;
+            cx.notify();
+        }
+    }
+
+    pub fn items(&self) -> Vec<SubItem> {
+        match self {
+            Self::Playground => vec![SubItem::History, SubItem::Starred, SubItem::Settings],
+            Self::Models => vec![SubItem::Genesis, SubItem::Explorer, SubItem::Quantum],
+            Self::Documentation => vec![
+                SubItem::Introduction,
+                SubItem::GetStarted,
+                SubItem::Tutorial,
+                SubItem::Changelog,
+            ],
+            Self::Settings => vec![
+                SubItem::General,
+                SubItem::Team,
+                SubItem::Billing,
+                SubItem::Limits,
+            ],
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl SubItem {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::History => "History",
+            Self::Starred => "Starred",
+            Self::Settings => "Settings",
+            Self::Genesis => "Genesis",
+            Self::Explorer => "Explorer",
+            Self::Quantum => "Quantum",
+            Self::Introduction => "Introduction",
+            Self::GetStarted => "Get Started",
+            Self::Tutorial => "Tutorial",
+            Self::Changelog => "Changelog",
+            Self::Team => "Team",
+            Self::Billing => "Billing",
+            Self::Limits => "Limits",
+            Self::General => "General",
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        match self {
+            Self::Quantum => true,
+            _ => false,
+        }
+    }
+
+    pub fn handler(
+        &self,
+        item: &Item,
+    ) -> impl Fn(&mut Welcome, &ClickEvent, &mut Window, &mut Context<Welcome>) + 'static {
+        let item = *item;
+        let subitem = *self;
+        move |this, _, _, cx| {
+            println!(
+                "Clicked on item: {}, child: {}",
+                item.label(),
+                subitem.label()
+            );
+            this.active_items.insert(item, true);
+            this.last_active_item = item;
+            this.active_subitem = Some(subitem);
+            cx.notify();
+        }
+    }
+}
+
+impl super::ViewTrait for Welcome {
+    fn title() -> &'static str {
+        "Sidebar"
+    }
+
+    fn description() -> &'static str {
+        "A composable, themeable and customizable sidebar component."
+    }
+
+    fn new_view(window: &mut Window, cx: &mut App) -> Entity<impl Render> {
+        Self::view(window, cx)
+    }
+}
+
+impl Focusable for Welcome {
+    fn focus_handle(&self, _: &gpui::App) -> gpui::FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
+impl Render for Welcome {
+    fn render(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        let groups: [Vec<Item>; 2] = [
+            vec![
+                Item::Playground,
+                Item::Models,
+                Item::Documentation,
+                Item::Settings,
+            ],
+            vec![
+                Item::DesignEngineering,
+                Item::SalesAndMarketing,
+                Item::Travel,
+            ],
         ];
 
-        div()
-            .flex_1()
-            .px_6()
-            .pb_6()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(0x888888))
-                    .font_family(mono_font())
-                    .mb_4()
-                    .child("// 全部工具"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_3()
-                    .mb_6()
-                    .children(tabs.iter().enumerate().map(|(i, &tab)| {
-                        let is_active = i == self.active_tab;
-                        div()
-                            .px_4()
-                            .py_2()
-                            .rounded_xl()
-                            .when(is_active, |this: Div| {
-                                this.bg(rgba(0x00d4ff33)).border_color(rgb(0x00d4ff))
-                            })
-                            .when(!is_active, |this| {
-                                this.bg(rgba(0xffffff05)).border_color(rgba(0xffffff10))
-                            })
-                            .border_1()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .when(is_active, |this: Div| this.text_color(rgb(0x00d4ff)))
-                            .when(!is_active, |this: Div| this.text_color(rgb(0xaaaaaa)))
-                            .child(tab)
-                    })),
-            )
-            .child(
-                div()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_4()
-                    .children(self.tools.iter().map(|tool| self.render_tool_card(tool))),
-            )
-    }
-
-    fn render_tool_card(&self, tool: &ToolCard) -> Div {
-        let (r, g, b) = tool.icon_color;
-        div()
-            .p_5()
-            .rounded_2xl()
-            .bg(rgba(0xffffff05))
+        h_flex()
+            .rounded(cx.theme().radius)
             .border_1()
-            .border_color(rgba(0xffffff10))
+            .border_color(cx.theme().border)
+            .h_full()
+            .when(self.side.is_right(), |this| this.flex_row_reverse())
             .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .gap_3()
-                    .mb_3()
-                    .child(
-                        div()
-                            .w_12()
-                            .h_12()
-                            .rounded_2xl()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_2xl()
-                            .bg(rgba(r as u32 * 0x10000 + g as u32 * 0x100 + b as u32))
-                            .child(tool.icon.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
+                Sidebar::new("sidebar-story")
+                    .side(self.side)
+                    .collapsed(self.collapsed)
+                    .w(px(220.))
+                    .gap_0()
+                    .header(
+                        SidebarHeader::new()
                             .child(
                                 div()
-                                    .text_base()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(0xffffff))
-                                    .child(tool.name.clone()),
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(cx.theme().radius)
+                                    .bg(cx.theme().success)
+                                    .text_color(cx.theme().success_foreground)
+                                    .size_8()
+                                    .flex_shrink_0()
+                                    .when(!self.collapsed, |this| {
+                                        this.child(Icon::new(IconName::GalleryVerticalEnd))
+                                    })
+                                    .when(self.collapsed, |this| {
+                                        this.size_4()
+                                            .bg(cx.theme().transparent)
+                                            .text_color(cx.theme().foreground)
+                                            .child(Icon::new(IconName::GalleryVerticalEnd))
+                                    }),
                             )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(0x888888))
-                                    .font_family(mono_font())
-                                    .child(tool.category.clone()),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(0xaaaaaa))
-                    .mb_3()
-                    .child(tool.description.clone()),
-            )
-            .child(div().flex().gap_2().children(tool.tags.iter().map(|tag| {
-                div()
-                    .px_3()
-                    .py_1()
-                    .rounded_full()
-                    .bg(rgba(0xffffff05))
-                    .border_1()
-                    .border_color(rgba(0xffffff10))
-                    .text_xs()
-                    .text_color(rgb(0x888888))
-                    .font_family(mono_font())
-                    .child(tag.clone())
-            })))
-    }
-
-    /// 渲染最近使用
-    fn render_recent_section(&self) -> Div {
-        div()
-            .px_6()
-            .pb_6()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(0x888888))
-                    .font_family(mono_font())
-                    .mb_4()
-                    .child("// 最近使用"),
-            )
-            .child(
-                div().flex().flex_col().gap_3().children(
-                    self.recent_items
-                        .iter()
-                        .map(|item| self.render_recent_item(item)),
-                ),
-            )
-    }
-
-    fn render_recent_item(&self, item: &RecentItem) -> Div {
-        div()
-            .flex()
-            .items_center()
-            .gap_4()
-            .px_5()
-            .py_4()
-            .rounded_xl()
-            .bg(rgba(0xffffff05))
-            .border_1()
-            .border_color(rgba(0xffffff10))
-            .child(
-                div()
-                    .w_10()
-                    .h_10()
-                    .rounded_lg()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_xl()
-                    .bg(rgba(0xffffff10))
-                    .child(item.icon.clone()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgb(0xffffff))
-                            .child(item.name.clone()),
+                            .when(!self.collapsed, |this| {
+                                this.child(
+                                    v_flex()
+                                        .gap_0()
+                                        .text_sm()
+                                        .flex_1()
+                                        .line_height(relative(1.25))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .child("Company Name")
+                                        .child(div().child("Enterprise").text_xs()),
+                                )
+                            })
+                            .when(!self.collapsed, |this| {
+                                this.child(
+                                    Icon::new(IconName::ChevronsUpDown).size_4().flex_shrink_0(),
+                                )
+                            })
+                            .dropdown_menu(|menu, _, _| {
+                                // 先占位：点击这些菜单时只触发 ToggleSearch，不再注册额外的 Action，避免重复注册 panic
+                                menu.menu("Twitter Inc.", Box::new(ToggleSearch))
+                                    .menu("Meta Platforms", Box::new(ToggleSearch))
+                                    .menu("Google Inc.", Box::new(ToggleSearch))
+                            }),
                     )
                     .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(0x888888))
-                            .font_family(mono_font())
-                            .child(item.time.clone()),
+                        SidebarGroup::new("Platform").child(SidebarMenu::new().children(
+                            groups[0].iter().enumerate().map(|(ix, item)| {
+                                let is_active =
+                                    self.last_active_item == *item && self.active_subitem == None;
+                                SidebarMenuItem::new(item.label())
+                                    .icon(item.icon())
+                                    .active(is_active)
+                                    .default_open(ix == 0)
+                                    .click_to_open(self.click_to_open_submenu)
+                                    .when(ix == 0, |this| {
+                                        this.context_menu({
+                                            move |this, _, _| {
+                                                this.link(
+                                                    "About",
+                                                    "https://github.com/longbridge/gpui-component",
+                                                )
+                                            }
+                                        })
+                                    })
+                                    .children(item.items().into_iter().enumerate().map(
+                                        |(ix, sub_item)| {
+                                            SidebarMenuItem::new(sub_item.label())
+                                                .active(self.active_subitem == Some(sub_item))
+                                                .disable(sub_item.is_disabled())
+                                                .when(ix == 0, |this| {
+                                                    this.suffix({
+                                                        let checked = self.checked;
+                                                        let view = cx.entity();
+                                                        move |window, _| {
+                                                            Switch::new("switch")
+                                                                .xsmall()
+                                                                .checked(checked)
+                                                                .on_click(window.listener_for(
+                                                                    &view,
+                                                                    Self::switch_checked_handler,
+                                                                ))
+                                                        }
+                                                    })
+                                                    .context_menu({
+                                                        move |this, _, _| {
+                                                            this.label("This is a label")
+                                                        }
+                                                    })
+                                                })
+                                                .on_click(cx.listener(sub_item.handler(&item)))
+                                        },
+                                    ))
+                                    .on_click(cx.listener(item.handler()))
+                            }),
+                        )),
+                    )
+                    .child(
+                        SidebarGroup::new("Projects").child(SidebarMenu::new().children(
+                            groups[1].iter().enumerate().map(|(ix, item)| {
+                                let is_active =
+                                    self.last_active_item == *item && self.active_subitem == None;
+                                SidebarMenuItem::new(item.label())
+                                    .icon(item.icon())
+                                    .active(is_active)
+                                    .disable(item.is_disabled())
+                                    .click_to_open(self.click_to_open_submenu)
+                                    .when(ix == 0, |this| {
+                                        this.suffix(|_, _| {
+                                            Badge::new().dot().count(1).child(
+                                                div().p_0p5().child(Icon::new(IconName::Bell)),
+                                            )
+                                        })
+                                    })
+                                    .when(ix == 1, |this| {
+                                        this.suffix(|_, _| Icon::new(IconName::Settings2))
+                                    })
+                                    .on_click(cx.listener(item.handler()))
+                            }),
+                        )),
+                    )
+                    .footer(
+                        SidebarFooter::new()
+                            .justify_between()
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .child(IconName::CircleUser)
+                                    .when(!self.collapsed, |this| this.child("Jason Lee")),
+                            )
+                            .when(!self.collapsed, |this| {
+                                this.child(Icon::new(IconName::ChevronsUpDown).size_4())
+                            }),
                     ),
             )
-            .child(div().text_xl().text_color(rgb(0x888888)).child("→"))
-    }
-
-    /// 渲染页脚
-    fn render_footer(&self) -> Div {
-        div()
-            .px_6()
-            .py_6()
-            .border_t_1()
-            .border_color(rgba(0xffffff10))
             .child(
-                div()
-                    .text_center()
-                    .text_sm()
-                    .text_color(rgb(0x888888))
-                    .child("Made with ")
-                    .child(div().text_color(rgb(0xec4899)).child("♥"))
-                    .child(" for Developers"),
+                v_flex()
+                    .size_full()
+                    .gap_4()
+                    .p_4()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_3()
+                            .when(self.side.is_right(), |this| {
+                                this.flex_row_reverse().justify_between()
+                            })
+                            .child(
+                                SidebarToggleButton::new()
+                                    .side(self.side)
+                                    .collapsed(self.collapsed)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.collapsed = !this.collapsed;
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(Divider::vertical().h_4())
+                            .child(
+                                Breadcrumb::new()
+                                    .child("Breadcrumb")
+                                    .child(BreadcrumbItem::new("Home").on_click(cx.listener(
+                                        |this, _, _, cx| {
+                                            this.last_active_item = Item::Playground;
+                                            cx.notify();
+                                        },
+                                    )))
+                                    .child(
+                                        BreadcrumbItem::new(self.last_active_item.label())
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.active_subitem = None;
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .when_some(self.active_subitem, |this, subitem| {
+                                        this.child(BreadcrumbItem::new(subitem.label()))
+                                    }),
+                            ),
+                    )
+                    .child(self.render_content(window, cx)),
             )
     }
 }

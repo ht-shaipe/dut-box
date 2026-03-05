@@ -4,9 +4,24 @@ name = "dut-box"
 version = "0.1.0"
 
 [dependencies]
+anyhow.workspace = true
+gpui-component.workspace = true
 gpui.workspace = true
 gpui_platform.workspace = true
-gpui-component = "0.5.1"
+rust-i18n.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+rust-embed.workspace = true
+tracing-subscriber = {version = "0.3.22", features = ["env-filter", "fmt", "registry"], default-features = false}
+
+[dependencies.dut-box-assets]
+path = "../crates/assets"
+
+# Native-only dependencies (not available on WASM)
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+reqwest_client.workspace = true
 
 [profile.release]
 lto = true

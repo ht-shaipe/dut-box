@@ -20,8 +20,11 @@ fn run_app() -> Result<(), JsValue> {
     let app = gpui_platform::single_threaded_web();
 
     app.run(|cx: &mut App| {
-        cx.open_window(WindowOptions::default(), |_, cx| cx.new(|_| Welcome::new()))
-            .expect("Failed to open window");
+        dut_box::init_gpui_component(cx);
+        cx.open_window(WindowOptions::default(), |window, cx| {
+            Welcome::view(window, cx)
+        })
+        .expect("Failed to open window");
         cx.activate(true);
     });
 
