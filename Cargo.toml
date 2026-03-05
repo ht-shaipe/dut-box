@@ -1,0 +1,26 @@
+[workspace]
+members = ["ui", "web"]
+resolver = "2"
+
+# WASM 兼容（与 gpui-component demo 一致）
+# - gpui 用 zed 仓库，避免 wasm 下拉入 rustix/calloop
+# - gpui-component 用 git 版本：其 Cargo.toml 里 smol 在 cfg(not(target_family = "wasm")) 下，wasm 不拉 smol/async-io/rustix
+[patch.crates-io]
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+psm = { git = "https://github.com/rust-lang/stacker", branch = "master" }
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+# 与 gpui-component demo 一致：整站用 zed 的 gpui，wasm 才不会拉入 rustix/calloop
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
+gpui-component = "0.5.1"
+gpui-component-assets = "0.5.1"
+gpui-component-macros = "0.5.1"
+log = "0.4"
+
+[workspace.lints.clippy]

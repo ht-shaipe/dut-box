@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "dut-box-web"
+publish = false
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# 本项目的 UI 库（包名为 dut-box）
+dut-box = { path = "../ui" }
+gpui.workspace = true
+gpui_platform.workspace = true
+
+# Web 相关
+console_error_panic_hook = "0.1"
+console_log = "1.0"
+log = "0.4"
+tracing-wasm = "0.2"
+wasm-bindgen = "0.2"
